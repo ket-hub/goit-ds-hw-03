@@ -1,75 +1,96 @@
-import json
+import argparse
 
-import scrapy
-from scrapy import Item, Field
-from itemadapter import ItemAdapter
-from scrapy.crawler import CrawlerProcess
-from scrapy.settings.default_settings import ITEM_PIPELINES
+from bson.objectid import ObjectId
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
 
+client = MongoClient(
+    "mongodb+srv://ironket_db_user:Le480Xc8SRhENXUe@goitlearn.vejdayj.mongodb.net/?appName=goitlearn",
+    server_api=ServerApi('1')
+)
 
-class QuoteItem(Item):
-    quote = Field()
-    author = Field()
-    tags = Field()
+db = client.book
 
-class AuthorItem(Item):
-    fullname = Field()
-    born_date = Field()
-    born_location = Field()
-    description = Field()
+parser = argparse.ArgumentParser(description='Server Cats Enterprise')
+parser.add_argument('--action', help='create,read, update, delete')
+parser.add_argument('--id')
+parser.add_argument('--name')
+parser.add_argument('--age')
+parser.add_argument('--features', nargs='+')
 
-class DataPipline:
-    quotes = []
-    authors = []
+arg = vars(parser.parse_args())
 
-    def process_item(self, item, spider):
-        adapter = ItemAdapter(item)
-        if 'fullname' in adapter.keys():
-            self.authors.append(dict(adapter))
-        if 'quote' in adapter.keys():
-            self.quotes.append(dict(adapter))
-        return item  
-
-    def close_spider(self, spider):
-        with open('quotes.json', 'w', encoding='utf-8') as fd:
-            json.dump(self.quotes, fd, ensure_ascii=False, indent=2)
-        with open('authors.json', 'w', encoding='utf-8') as fd:
-            json.dump(self.authors, fd, ensure_ascii=False, indent=2)
+action = arg.get('action')
+pk = arg.get('id')
+name = arg.get('name')
+age = arg.get('age')
+features = arg.get('features')
 
 
+def create(name, age, features):
+    try:
+        r = db.cats.insert_one({
+            'name': name,
+            'age': age,
+            'features': features,
+        })
+        return r
+    except Exception as e:
+        print(f"Помилка при створенні: {e}")
+        return None
 
-class QuotesSpider(scrapy.Spider):
-    name = "get_quotes"
-    allowed_domains = ["quotes.toscrape.com"]
-    start_urls = ["https://quotes.toscrape.com/"]
-    custom_settings = {
-        "ITEM_PIPELINES": {
-            "__main__.DataPipline": 300
-        }
+
+def read(pk, name, age, features):
+    if name:
+        r = db.cats.find_one({'name': name})
+    else:
+        r = db.cats.find()
+    return r
+
+
+def update(pk, name, age, features):
+    r = db.cats.update_one({'name': name}, {
+        '$set': {'age': age},
+        '$push': {'features': features}
     }
+                           )
+    return r
 
-    def parse(self, response, **kwargs):
-        for q in response.xpath("/html//div[@class='quote']"):
-            quote = q.xpath("span[@class='text']/text()").get(default="")
-            author = q.xpath("span/small[@class='author']/text()").get(default="")
-            tags = q.xpath("div[@class='tags']/a/text()").getall()
-            # TODO: clear tags
-            yield QuoteItem(quote=quote, author=author, tags=tags)
-            yield response.follow(url=self.start_urls[0] + q.xpath("span/a/@href").get(), callback = self.parse_author)
 
-        next_link = response.xpath("/html//li[@class='next']/a/@href").get()
-        if next_link:
-            yield scrapy.Request(url=self.start_urls[0] + next_link)
-    @classmethod
-    def parse_author(cls, response, **kwargs):
-        content = response.xpath("/html//div[@class='author-details']")
-        fullname = content.xpath("h3[@class='author-title']/text()").get().strip()
-        born_date = content.xpath("p/span[@class='author-born-date']/text()").get().strip()
-        born_location = content.xpath("p/span[@class='author-born-location']/text()").get().strip()
-        description = content.xpath("div[@class='author-description']/text()").get().strip()
-        yield AuthorItem(fullname=fullname, born_date=born_date, born_location=born_location, description=description)
+def delete(name):
+    if name:
+        return db.cats.delete_one({'name': name})
+    else:
+        return db.cats.delete_many()
 
-if __name__ == "__main__":
-    process = CrawlerProcess()
-    process.crawl(QuotesSpider)
-    process.start()
+
+def main():
+    try:
+        match action:
+            case 'create':
+                r = create(name, age, features)
+                print(r)
+            case 'read':
+                r = read(pk, name, age, features)
+                for e in r:
+                    print(e)
+            case 'update':
+                r = update(pk, name, age, features)
+                print(r)
+            case 'delete':
+                r = delete(name)
+                print(r)
+            case _:
+                print('Unknown action')
+    except Exception as e:
+        print(f"Помилка виконання: {e}")
+
+
+if __name__ == '__main__':
+    main()
+
+
+
+
+
+
