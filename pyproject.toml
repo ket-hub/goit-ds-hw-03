@@ -1,5 +1,5 @@
 [project]
-name = "pythonproject1"
+name = "webscrap0202"
 version = "0.1.0"
 description = ""
 authors = [
@@ -7,7 +7,6 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "pymongo (>=4.16.0,<5.0.0)"
 ]
 
 
